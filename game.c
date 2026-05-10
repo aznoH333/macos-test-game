@@ -5,26 +5,31 @@
 #include "string.h"
 
 
+
+// test foo
+// foo foo
+
+
 // -------------------------------------------------------------------------------------
 // Textures
 // -------------------------------------------------------------------------------------
 #define MAX_TEXTURES 32
 #define MAX_ASSET_NAME_LENGTH 32
-#define MAX_HASHMAP_SIZE 301
+#define MAX_HASHMAP_SIZE 521
 
 // returns a hash of a string
 // giga lame implementation
-int hashName(char* name) {
-	int output = 0;
+unsigned int hashName(char* name) {
+	unsigned int output = 1;
 
 	int i = 0;
 
 	while (name[i]) {
-		output += name[i];
+		output *= name[i] + name[i-1 + (i == 0)];
 		++i;
 	}
 
-	return output * 97 % MAX_HASHMAP_SIZE;
+	return output % MAX_HASHMAP_SIZE;
 }
 
 
@@ -68,7 +73,7 @@ void loadSprites() {
 		identifier[copyLength] = 0;
 
 
-		int hash = hashName(identifier);
+		unsigned int hash = hashName(identifier);
 		printf("Loading texture [%s] hash[%d]\n", identifier, hash);
 			
 		// load to memmory
@@ -82,13 +87,16 @@ void loadSprites() {
 }
 
 Texture2D getTexture(char* identifier){
-	int hash = hashName(identifier);
+	unsigned int hash = hashName(identifier);
 	return textureMap.textures[hash].texture;	
 }
 
 #define GAME_SCALE 4.0f
 void drawTexture(char* identifier, float x, float y, Color color) {
-	DrawTextureEx(getTexture(identifier), (Vector2){x * GAME_SCALE, y * GAME_SCALE}, 0.0f, GAME_SCALE, color);
+	if (x > -32 && x < 1300 && y > -32 && y < 800) {
+		DrawTextureEx(getTexture(identifier), (Vector2){x * GAME_SCALE, y * GAME_SCALE}, 0.0f, GAME_SCALE, color);
+	}
+
 }
 
 // -------------------------------------------------------------------------------------
@@ -124,25 +132,25 @@ void loadWeaponPart(
 }
 
 
-struct WeaponMaterial {
+struct GameMaterial {
 	Color color;
 };
-typedef struct WeaponMaterial WeaponMaterial;
+typedef struct GameMaterial GameMaterial;
 
 #define MAX_WEAPON_MATERIALS 32
-WeaponMaterial weaponMaterials[MAX_WEAPON_MATERIALS];
-int nextWeaponMaterialIndex = 0;
+GameMaterial weaponGameMaterials[MAX_WEAPON_MATERIALS];
+int nextGameMaterialIndex = 0;
 
-void loadWeaponMaterial(Color color) {
-	WeaponMaterial* weaponMaterial = &weaponMaterials[nextWeaponMaterialIndex++];
+void loadGameMaterial(Color color) {
+	GameMaterial* weaponGameMaterial = &weaponGameMaterials[nextGameMaterialIndex++];
 
-	weaponMaterial->color = color;
+	weaponGameMaterial->color = color;
 }
 
 
 struct WeaponPartInstance {
 	WeaponPart* part;
-	WeaponMaterial* material;
+	GameMaterial* material;
 };
 typedef struct WeaponPartInstance WeaponPartInstance;
 
@@ -166,7 +174,7 @@ Weapon makeWeapon(WeaponPartInstance handle, WeaponPartInstance blade) {
 WeaponPartInstance makeWeaponPartInstance(int partIndex, int materialIndex) {
 	return (WeaponPartInstance) {
 		.part = &weaponParts[partIndex],
-		.material = &weaponMaterials[materialIndex]
+		.material = &weaponGameMaterials[materialIndex]
 	};
 }
 
@@ -250,16 +258,186 @@ void loadWeapons() {
 
 	// weapon materials
 	// light wood
-	loadWeaponMaterial((Color){167, 123, 91, 255});
+	loadGameMaterial((Color){167, 123, 91, 255});
 	// dark wood
-	loadWeaponMaterial((Color){128, 73, 58, 255});
+	loadGameMaterial((Color){128, 73, 58, 255});
 	// copper
-	loadWeaponMaterial((Color){211, 160, 104, 255});
+	loadGameMaterial((Color){180, 82, 82, 255});
 	// iron
-	loadWeaponMaterial((Color){134, 126, 136, 255});
+	loadGameMaterial((Color){134, 126, 136, 255});
 	// gold
-	loadWeaponMaterial((Color){237, 225, 158, 255});
+	loadGameMaterial((Color){237, 225, 158, 255});
+	// human skin
+	loadGameMaterial((Color){229, 206, 180, 255});
+	// bone
+	loadGameMaterial((Color){242, 240, 209, 255});
+	// goblin skin
+	loadGameMaterial((Color){138, 176, 96, 255});
+	
+}
 
+
+// -------------------------------------------------------------------------------------
+// Body parts
+// -------------------------------------------------------------------------------------
+
+typedef struct {
+	char* part_name;
+	char next_x;
+	char next_y;
+} BodyPart;
+
+typedef struct {
+	BodyPart* body_part;
+	GameMaterial* material;
+} BodyPartInstance;
+
+
+#define MAX_BODY_PARTS 32
+BodyPart bodyParts[MAX_BODY_PARTS];
+int nextBodyPartIndex = 0;
+
+void loadBodyPart(
+	char* part_name,
+	char next_x,
+	char next_y
+) {
+	bodyParts[nextBodyPartIndex++] = (BodyPart) {
+		.part_name = part_name,
+		.next_x = next_x,
+		.next_y = next_y
+	};
+}
+
+
+#define MAX_BODY_PARTS_PER_BODY 8
+typedef struct {
+	BodyPartInstance body_parts[MAX_BODY_PARTS_PER_BODY];
+	int body_part_count;
+} Body;
+
+BodyPartInstance makeBodyPartInstance(int bodyPartIndex, int materialIndex) {
+	return (BodyPartInstance){
+		.body_part = &bodyParts[bodyPartIndex],
+		.material = &weaponGameMaterials[materialIndex]
+	};
+}
+
+Body makeBody(BodyPartInstance body_parts[MAX_BODY_PARTS_PER_BODY], int count) {
+	Body body = {0};
+
+
+	memcpy(body.body_parts, body_parts, sizeof(BodyPartInstance) * MAX_BODY_PARTS_PER_BODY);
+	body.body_part_count = count;
+
+
+	return body; 
+}
+
+
+void drawBody(Body* body, float x, float y) {
+	
+	float current_x = x;
+	float current_y = y;
+
+	for (int i = 0; i < body->body_part_count; ++i) {
+		BodyPartInstance* part = &body->body_parts[i];
+		drawTexture(part->body_part->part_name, current_x, current_y, part->material->color);
+		
+
+		current_x += (float) part->body_part->next_x;
+		current_y -= (float) part->body_part->next_y;
+	}
+
+}
+
+
+void loadBodyParts() {
+	loadBodyPart(
+		"body_parts_0001",
+		0,
+		4
+	);
+	
+	loadBodyPart(
+		"body_parts_0002",
+		0,
+		4
+	);
+		
+	loadBodyPart(
+		"body_parts_0003",
+		0,
+		4
+	);
+	
+	loadBodyPart(
+		"body_parts_0004",
+		0,
+		4
+	);
+	
+	loadBodyPart(
+		"body_parts_0005",
+		0,
+		4
+	);
+	
+	loadBodyPart(
+		"body_parts_0006",
+		0,
+		4
+	);
+	
+	loadBodyPart(
+		"body_parts_0007",
+		0,
+		4
+	);
+	
+	loadBodyPart(
+		"body_parts_0008",
+		0,
+		4
+	);
+	
+	loadBodyPart(
+		"body_parts_0009",
+		0,
+		4
+	);
+		
+	loadBodyPart(
+		"body_parts_0010",
+		0,
+		4
+	);
+	
+	loadBodyPart(
+		"body_parts_0011",
+		0,
+		2
+	);
+	
+}
+
+
+Body makeAGuy(int legsMaterialIndex, int bodyMaterialIndex, int headMaterialIndex, int headShapeIndex, int headWearMaterialIndex, int headWearShapeIndex) {
+
+
+	int count = 3 + (headWearShapeIndex != 0);
+	
+	BodyPartInstance bodyParts[MAX_BODY_PARTS_PER_BODY];
+
+	bodyParts[0] = makeBodyPartInstance(10, legsMaterialIndex);
+	bodyParts[1] = makeBodyPartInstance(9, bodyMaterialIndex);
+	bodyParts[2] = makeBodyPartInstance(headShapeIndex, headMaterialIndex);
+	
+	if (headWearShapeIndex != -1) {
+		bodyParts[3] = makeBodyPartInstance(headWearShapeIndex, headWearMaterialIndex);
+	}
+
+	return makeBody(bodyParts, count);
 }
 
 // -------------------------------------------------------------------------------------
@@ -268,6 +446,7 @@ void loadWeapons() {
 void loadGame() {
 	loadSprites();
 	loadWeapons();
+	loadBodyParts();
 }
 
 
@@ -286,16 +465,16 @@ int main(void)
 	loadGame();
   
   	// blade type, handle type, blade material, handle material
-	Weapon weapons[6][3][nextWeaponMaterialIndex][nextWeaponMaterialIndex];
+	Weapon weapons[6][3][nextGameMaterialIndex][nextGameMaterialIndex];
 
 
 	for (int blade = 0; blade < 6; ++blade) {
 		for (int handle = 0; handle < 3; ++handle) {
-			for (int bladeMaterial = 0; bladeMaterial < nextWeaponMaterialIndex; ++bladeMaterial) {
-				for (int handleMaterial = 0; handleMaterial < nextWeaponMaterialIndex; ++handleMaterial) {
-					weapons[blade][handle][bladeMaterial][handleMaterial] = makeWeapon(
-						makeWeaponPartInstance(6+handle, handleMaterial), 
-						makeWeaponPartInstance(blade, bladeMaterial)
+			for (int bladeGameMaterial = 0; bladeGameMaterial < nextGameMaterialIndex; ++bladeGameMaterial) {
+				for (int handleGameMaterial = 0; handleGameMaterial < nextGameMaterialIndex; ++handleGameMaterial) {
+					weapons[blade][handle][bladeGameMaterial][handleGameMaterial] = makeWeapon(
+						makeWeaponPartInstance(6+handle, handleGameMaterial), 
+						makeWeaponPartInstance(blade, bladeGameMaterial)
 					);
 				}
 			}
@@ -305,6 +484,40 @@ int main(void)
 
 	int cameraX = 0;
 	int cameraY = 0;
+
+
+	Body testBody = makeAGuy(3, 3, 4, 4, 1, 1);
+		
+
+	Body people[10000];
+	int nextIndex = 0;
+	for (int shoeMaterial = 0; shoeMaterial < nextGameMaterialIndex; ++shoeMaterial) {
+		for (int shirtMaterial = 0; shirtMaterial < nextGameMaterialIndex; ++shirtMaterial) {
+			for (int skinColor = 0; skinColor < nextGameMaterialIndex; ++skinColor)  {
+				for (int headShape = 0; headShape < 5; ++headShape ) {
+					for (int hatWearMaterial = 0; hatWearMaterial < nextGameMaterialIndex; ++hatWearMaterial) {
+						for (int hatShape = 0; hatShape < 5; ++hatShape) {
+							people[nextIndex++] = makeAGuy(
+								shoeMaterial,
+								shirtMaterial,
+								skinColor,
+								headShape + 5,
+								hatWearMaterial,
+								hatShape == 0 ? -1 : hatShape - 1
+							);
+							if (nextIndex >= 10000) {
+								goto bepis;
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	bepis:
+
+	printf("loaded\n");
 
 	SetTargetFPS(60);
     while (!WindowShouldClose())
@@ -331,21 +544,34 @@ int main(void)
         BeginDrawing();
 
 		ClearBackground(RAYWHITE);
-
-
+		
+		// render weapons
 		for (int blade = 0; blade < 6; ++blade) {
 			for (int handle = 0; handle < 3; ++handle) {
-				for (int bladeMaterial = 0; bladeMaterial < nextWeaponMaterialIndex; ++bladeMaterial) {
-					for (int handleMaterial = 0; handleMaterial < nextWeaponMaterialIndex; ++handleMaterial) {
+				for (int bladeGameMaterial = 0; bladeGameMaterial < nextGameMaterialIndex; ++bladeGameMaterial) {
+					for (int handleGameMaterial = 0; handleGameMaterial < nextGameMaterialIndex; ++handleGameMaterial) {
 
-						drawWeapon(&weapons[blade][handle][bladeMaterial][handleMaterial], 
-							cameraX + 10 + blade * 30 + bladeMaterial * 30 * 6, 
-							cameraY + 10 + handle * 30 + handleMaterial * 30 * 3);
+						drawWeapon(&weapons[blade][handle][bladeGameMaterial][handleGameMaterial], 
+							cameraX + 10 + blade * 30 + bladeGameMaterial * 32 * 6, 
+							cameraY + 10 + handle * 30 + handleGameMaterial * 32 * 3);
 					}
 				}
 			}
 		}
-        EndDrawing();
+
+		// render guys
+		for (int i = 0; i < 10000; i++) {
+			int x = i % 100 * -30 + cameraX;
+			int y = i / 100 * 30 + cameraY;
+			drawBody(&people[i], (float)x, (float)y);
+
+		}
+
+
+		DrawText("Rendering weapons", 530, 10, 30, BLACK);
+
+		drawBody(&testBody, -30 + cameraX, 0 + cameraY);
+		EndDrawing();
     }
 
     CloseWindow();        // Close window and OpenGL context
