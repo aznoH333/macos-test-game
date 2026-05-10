@@ -2,13 +2,15 @@
 #include "stdio.h"
 #include "dirent.h"
 #include "stdlib.h"
+#include "string.h"
+
 
 // -------------------------------------------------------------------------------------
 // Textures
 // -------------------------------------------------------------------------------------
 #define MAX_TEXTURES 32
 #define MAX_ASSET_NAME_LENGTH 32
-
+#define MAX_HASHMAP_SIZE 301
 
 // returns a hash of a string
 // giga lame implementation
@@ -22,7 +24,7 @@ int hashName(char* name) {
 		++i;
 	}
 
-	return output * 97 % 301;
+	return output * 97 % MAX_HASHMAP_SIZE;
 }
 
 
@@ -35,8 +37,7 @@ typedef struct TextureMapNode TextureMapNode;
 
 
 struct TextureMap{
-	TextureMapNode textures[MAX_TEXTURES];
-	int textureCount;
+	TextureMapNode textures[MAX_HASHMAP_SIZE];
 };
 typedef struct TextureMap TextureMap;
 
@@ -56,32 +57,35 @@ void loadSprites() {
     
 	readdir(dr); readdir(dr); // skip . ..
 	while ((de = readdir(dr)) != NULL){
-		TextureMapNode* node = &textureMap.textures[textureMap.textureCount];
-	
+		// build texture path
 		char texturePath[128];	
 		snprintf(texturePath, 128, "./resources/sprites/%s", de->d_name);
 		
-		int hash = hashName(texturePath);
-		printf("Loading texture #%d [%s] hash[%d]\n", textureMap.textureCount, texturePath, hash);
+		// build identifier
+		char identifier[128];
+		int copyLength = strlen(de->d_name)-4;
+		strncpy(identifier, de->d_name, copyLength);
+		identifier[copyLength] = 0;
+
+
+		int hash = hashName(identifier);
+		printf("Loading texture [%s] hash[%d]\n", identifier, hash);
 			
+		// load to memmory
+		TextureMapNode* node = &textureMap.textures[hash];
 		node->hash = hash;
 		node->texture = LoadTexture(texturePath);
 	
-
-		textureMap.textureCount++;
 	}
     closedir(dr);    
 
 }
-/*
+
 Texture2D getTexture(char* identifier){
-	for (int i = 0; i < textureMap.textureCount; ++i) {
-		TextureMapNode* node = &textureMap.textures[i];
-
-
-	}
+	int hash = hashName(identifier);
+	return textureMap.textures[hash].texture;	
 }
-*/
+
 
 //------------------------------------------------------------------------------------
 // Program main entry point
@@ -105,7 +109,7 @@ int main(void)
 		ClearBackground(RAYWHITE);
 
         DrawText("Congrats! You created your first window!", 190, 200, 20, LIGHTGRAY);
-
+		DrawTexture(getTexture("weapon_parts_0001"), 50, 50, WHITE);
 		
 
         EndDrawing();
