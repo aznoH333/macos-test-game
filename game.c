@@ -86,9 +86,9 @@ Texture2D getTexture(char* identifier){
 	return textureMap.textures[hash].texture;	
 }
 
-#define GAME_SCALE 2.0f
-void drawTexture(char* identifier, float x, float y) {
-	DrawTextureEx(getTexture(identifier), (Vector2){x * GAME_SCALE, y * GAME_SCALE}, 0.0f, GAME_SCALE, WHITE);
+#define GAME_SCALE 4.0f
+void drawTexture(char* identifier, float x, float y, Color color) {
+	DrawTextureEx(getTexture(identifier), (Vector2){x * GAME_SCALE, y * GAME_SCALE}, 0.0f, GAME_SCALE, color);
 }
 
 // -------------------------------------------------------------------------------------
@@ -96,7 +96,6 @@ void drawTexture(char* identifier, float x, float y) {
 // -------------------------------------------------------------------------------------
 #define WEAPON_PART_HANDLE 0
 #define WEAPON_PART_BLADE 1
-
 
 struct WeaponPart {
 	char* part_name;
@@ -122,25 +121,53 @@ void loadWeaponPart(
 	part->part_type = part_type;
 	part->next_x = next_x;
 	part->next_y = next_y;
-	
-
 }
 
 
+struct WeaponMaterial {
+	Color color;
+};
+typedef struct WeaponMaterial WeaponMaterial;
+
+#define MAX_WEAPON_MATERIALS 32
+WeaponMaterial weaponMaterials[MAX_WEAPON_MATERIALS];
+int nextWeaponMaterialIndex = 0;
+
+void loadWeaponMaterial(Color color) {
+	WeaponMaterial* weaponMaterial = &weaponMaterials[nextWeaponMaterialIndex++];
+
+	weaponMaterial->color = color;
+}
+
+
+struct WeaponPartInstance {
+	WeaponPart* part;
+	WeaponMaterial* material;
+};
+typedef struct WeaponPartInstance WeaponPartInstance;
+
+
 struct Weapon {
-	WeaponPart* weaponParts[2];
+	WeaponPartInstance weaponParts[2];
 };
 typedef struct Weapon Weapon;
 
 
-Weapon makeWeapon(int handleIndex, int bladeIndex) {
+Weapon makeWeapon(WeaponPartInstance handle, WeaponPartInstance blade) {
 	Weapon weapon;
 
-	weapon.weaponParts[0] = &weaponParts[handleIndex];
-	weapon.weaponParts[1] = &weaponParts[bladeIndex];
+	weapon.weaponParts[0] = handle;
+	weapon.weaponParts[1] = blade;
 
 
 	return weapon;
+}
+
+WeaponPartInstance makeWeaponPartInstance(int partIndex, int materialIndex) {
+	return (WeaponPartInstance) {
+		.part = &weaponParts[partIndex],
+		.material = &weaponMaterials[materialIndex]
+	};
 }
 
 void drawWeapon(Weapon* weapon, float x, float y) {
@@ -148,14 +175,14 @@ void drawWeapon(Weapon* weapon, float x, float y) {
 	float current_x = x;
 	float current_y = y;
 	for (int i = 0; i < 2; ++i) {
-		WeaponPart* part = weapon->weaponParts[i];
+		WeaponPartInstance* part = &weapon->weaponParts[i];
 
 
 		
-		drawTexture(part->part_name, current_x, current_y);
+		drawTexture(part->part->part_name, current_x, current_y, part->material->color);
 
-		current_x += (float) part->next_x;
-		current_y -= (float) part->next_y;
+		current_x += (float) part->part->next_x;
+		current_y -= (float) part->part->next_y;
 	}
 
 }
@@ -221,6 +248,18 @@ void loadWeapons() {
 		9
 	);
 
+	// weapon materials
+	// light wood
+	loadWeaponMaterial((Color){167, 123, 91, 255});
+	// dark wood
+	loadWeaponMaterial((Color){128, 73, 58, 255});
+	// copper
+	loadWeaponMaterial((Color){211, 160, 104, 255});
+	// iron
+	loadWeaponMaterial((Color){134, 126, 136, 255});
+	// gold
+	loadWeaponMaterial((Color){237, 225, 158, 255});
+
 }
 
 // -------------------------------------------------------------------------------------
@@ -239,38 +278,73 @@ int main(void)
 {
 
 
-	const int screenWidth = 800;
-    const int screenHeight = 450;
+	const int screenWidth = 1280;
+    const int screenHeight = 720;
 
     InitWindow(screenWidth, screenHeight, "raylib [core] example - basic window");
 
 	loadGame();
   
-	Weapon weapons[6][3];
+  	// blade type, handle type, blade material, handle material
+	Weapon weapons[6][3][nextWeaponMaterialIndex][nextWeaponMaterialIndex];
 
-	Weapon test = makeWeapon(7, 1);
 
 	for (int blade = 0; blade < 6; ++blade) {
 		for (int handle = 0; handle < 3; ++handle) {
-			weapons[blade][handle] = makeWeapon(6+handle, blade);
+			for (int bladeMaterial = 0; bladeMaterial < nextWeaponMaterialIndex; ++bladeMaterial) {
+				for (int handleMaterial = 0; handleMaterial < nextWeaponMaterialIndex; ++handleMaterial) {
+					weapons[blade][handle][bladeMaterial][handleMaterial] = makeWeapon(
+						makeWeaponPartInstance(6+handle, handleMaterial), 
+						makeWeaponPartInstance(blade, bladeMaterial)
+					);
+				}
+			}
+			
 		}
 	}
+
+	int cameraX = 0;
+	int cameraY = 0;
 
 	SetTargetFPS(60);
     while (!WindowShouldClose())
     {
+
+		if (IsKeyDown(KEY_UP)) {
+			cameraY += 1;
+		}
+
+		if (IsKeyDown(KEY_DOWN)) {
+			cameraY -= 1;
+		}
+
+		if (IsKeyDown(KEY_LEFT)) {
+			cameraX += 1;
+		}
+
+
+		if (IsKeyDown(KEY_RIGHT)) {
+			cameraX -= 1;
+		}
+
+
         BeginDrawing();
 
 		ClearBackground(RAYWHITE);
 
-        DrawText("Congrats! You created your first window!", 190, 200, 20, LIGHTGRAY);
 
 		for (int blade = 0; blade < 6; ++blade) {
 			for (int handle = 0; handle < 3; ++handle) {
-				drawWeapon(&weapons[blade][handle], 10 + blade * 30, 10 + handle * 30);
+				for (int bladeMaterial = 0; bladeMaterial < nextWeaponMaterialIndex; ++bladeMaterial) {
+					for (int handleMaterial = 0; handleMaterial < nextWeaponMaterialIndex; ++handleMaterial) {
+
+						drawWeapon(&weapons[blade][handle][bladeMaterial][handleMaterial], 
+							cameraX + 10 + blade * 30 + bladeMaterial * 30 * 6, 
+							cameraY + 10 + handle * 30 + handleMaterial * 30 * 3);
+					}
+				}
 			}
 		}
-
         EndDrawing();
     }
 
