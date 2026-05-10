@@ -86,6 +86,151 @@ Texture2D getTexture(char* identifier){
 	return textureMap.textures[hash].texture;	
 }
 
+#define GAME_SCALE 2.0f
+void drawTexture(char* identifier, float x, float y) {
+	DrawTextureEx(getTexture(identifier), (Vector2){x * GAME_SCALE, y * GAME_SCALE}, 0.0f, GAME_SCALE, WHITE);
+}
+
+// -------------------------------------------------------------------------------------
+// Weapon drawing
+// -------------------------------------------------------------------------------------
+#define WEAPON_PART_HANDLE 0
+#define WEAPON_PART_BLADE 1
+
+
+struct WeaponPart {
+	char* part_name;
+	char part_type;
+	char next_x;
+	char next_y;
+};
+typedef struct WeaponPart WeaponPart;
+
+#define MAX_WEAPON_PARTS 32
+WeaponPart weaponParts[MAX_WEAPON_PARTS];
+int nextWeaponPartIndex = 0;
+
+void loadWeaponPart(
+	char* part_name,
+	char part_type,
+	char next_x,
+	char next_y
+) {
+	WeaponPart* part = &weaponParts[nextWeaponPartIndex++];
+
+	part->part_name = part_name;
+	part->part_type = part_type;
+	part->next_x = next_x;
+	part->next_y = next_y;
+	
+
+}
+
+
+struct Weapon {
+	WeaponPart* weaponParts[2];
+};
+typedef struct Weapon Weapon;
+
+
+Weapon makeWeapon(int handleIndex, int bladeIndex) {
+	Weapon weapon;
+
+	weapon.weaponParts[0] = &weaponParts[handleIndex];
+	weapon.weaponParts[1] = &weaponParts[bladeIndex];
+
+
+	return weapon;
+}
+
+void drawWeapon(Weapon* weapon, float x, float y) {
+	
+	float current_x = x;
+	float current_y = y;
+	for (int i = 0; i < 2; ++i) {
+		WeaponPart* part = weapon->weaponParts[i];
+
+
+		
+		drawTexture(part->part_name, current_x, current_y);
+
+		current_x += (float) part->next_x;
+		current_y -= (float) part->next_y;
+	}
+
+}
+
+
+void loadWeapons() {
+	// load weapon parts
+	loadWeaponPart(
+		"weapon_parts_0001",
+		WEAPON_PART_BLADE,
+		0,
+		0
+	);
+	loadWeaponPart(
+		"weapon_parts_0002",
+		WEAPON_PART_BLADE,
+		0,
+		0
+	);
+	loadWeaponPart(
+		"weapon_parts_0003",
+		WEAPON_PART_BLADE,
+		0,
+		0
+	);
+
+	loadWeaponPart(
+		"weapon_parts_0004",
+		WEAPON_PART_BLADE,
+		0,
+		0
+	);
+
+	loadWeaponPart(
+		"weapon_parts_0005",
+		WEAPON_PART_BLADE,
+		0,
+		0
+	);
+	loadWeaponPart(
+		"weapon_parts_0006",
+		WEAPON_PART_BLADE,
+		0,
+		0
+	);
+
+	loadWeaponPart(
+		"weapon_parts_0007",
+		WEAPON_PART_HANDLE,
+		0,
+		0
+	);
+	loadWeaponPart(
+		"weapon_parts_0008",
+		WEAPON_PART_HANDLE,
+		2,
+		2
+	);
+	loadWeaponPart(
+		"weapon_parts_0009",
+		WEAPON_PART_HANDLE,
+		9,
+		9
+	);
+
+}
+
+// -------------------------------------------------------------------------------------
+// Loading
+// -------------------------------------------------------------------------------------
+void loadGame() {
+	loadSprites();
+	loadWeapons();
+}
+
 
 //------------------------------------------------------------------------------------
 // Program main entry point
@@ -99,8 +244,18 @@ int main(void)
 
     InitWindow(screenWidth, screenHeight, "raylib [core] example - basic window");
 
-	loadSprites();
-    
+	loadGame();
+  
+	Weapon weapons[6][3];
+
+	Weapon test = makeWeapon(7, 1);
+
+	for (int blade = 0; blade < 6; ++blade) {
+		for (int handle = 0; handle < 3; ++handle) {
+			weapons[blade][handle] = makeWeapon(6+handle, blade);
+		}
+	}
+
 	SetTargetFPS(60);
     while (!WindowShouldClose())
     {
@@ -109,8 +264,12 @@ int main(void)
 		ClearBackground(RAYWHITE);
 
         DrawText("Congrats! You created your first window!", 190, 200, 20, LIGHTGRAY);
-		DrawTexture(getTexture("weapon_parts_0001"), 50, 50, WHITE);
-		
+
+		for (int blade = 0; blade < 6; ++blade) {
+			for (int handle = 0; handle < 3; ++handle) {
+				drawWeapon(&weapons[blade][handle], 10 + blade * 30, 10 + handle * 30);
+			}
+		}
 
         EndDrawing();
     }
